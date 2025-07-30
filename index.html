@@ -134,7 +134,6 @@
                     { id: '2025-08-06', date: 'August 6', day: 'Wednesday' },
                     { id: '2025-08-07', date: 'August 7', day: 'Thursday' },
                     { id: '2025-08-08', date: 'August 8', day: 'Friday' },
-                    { id: '2025-08-09', date: 'August 9', day: 'Saturday' },
                 ];
                 const unsubscribe = scheduleCollectionRef.onSnapshot((snapshot) => {
                     const signupData = {};
@@ -204,14 +203,14 @@
                                 </div>
                             </div>
                             <h1 className="text-5xl sm:text-6xl font-bold text-cyan-900 mt-4">2025 Family Beach Trip!</h1>
-                            <p className="text-lg text-cyan-800 mt-2">Dinner Schedule: Aug 2nd - 9th, 2025</p>
+                            <p className="text-lg text-cyan-800 mt-2">Dinner Schedule: Aug 2nd - 8th, 2025</p>
                             <p className="text-xl text-orange-600 font-semibold mt-4">Pick a night to be the chef!</p>
                         </header>
                         <div className="space-y-5">
                             {schedule.map(day => <DayCard key={day.id} day={day} currentUserId={userId} onSignup={handleSignup} onRemove={handleRemove} />)}
                         </div>
                         <footer className="text-center mt-10 text-cyan-800/70 text-sm">
-                            <p>Have fun in the sun! ☀️�🌊</p>
+                            <p>Have fun in the sun! ☀️🦀🌊</p>
                         </footer>
                     </div>
                 </div>
