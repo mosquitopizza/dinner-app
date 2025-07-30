@@ -71,23 +71,32 @@
                 <rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" />
             </svg>
         );
+        const LogoutIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+        );
+
 
         // --- Main App Component ---
         const App = () => {
             const { useState, useEffect } = React;
 
             const [schedule, setSchedule] = useState([]);
-            const [userId, setUserId] = useState(null);
+            const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [db, setDb] = useState(null);
             const [auth, setAuth] = useState(null);
-            const appId = 'family-beach-trip-2025';
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [view, setView] = useState('main'); // 'main' or 'admin'
+            const [dates, setDates] = useState(null);
+            const appId = 'family-beach-trip';
 
             useEffect(() => {
                 try {
                     if (typeof firebase === 'undefined') {
-                        setError("Firebase SDKs failed to load. Please check your internet connection and refresh.");
+                        setError("Firebase SDKs failed to load.");
                         setLoading(false);
                         return;
                     }
@@ -100,76 +109,113 @@
                     setDb(app.firestore());
                     setAuth(app.auth());
                 } catch (err) {
-                    console.error("Firebase Init Error:", err);
-                    setError("Failed to initialize Firebase. Check that your API keys are correct.");
+                    setError("Failed to initialize Firebase.");
                     setLoading(false);
                 }
             }, []);
 
             useEffect(() => {
                 if (!auth) return;
-                const unsubscribe = auth.onAuthStateChanged(async (user) => {
+                const unsubscribe = auth.onAuthStateChanged(user => {
                     if (user) {
-                        setUserId(user.uid);
+                        setUser(user);
+                        setIsAdmin(user.email === 'stevewstrawn@gmail.com');
                     } else {
-                        try {
-                            await auth.signInAnonymously();
-                        } catch (err) {
-                            setError("Could not connect to the authentication service.");
-                            setLoading(false);
-                        }
+                        // If no user, sign in anonymously
+                        auth.signInAnonymously().catch(err => {
+                            setError("Could not sign in anonymously.");
+                        });
                     }
                 });
                 return () => unsubscribe();
             }, [auth]);
 
             useEffect(() => {
-                if (!db || !userId) return;
-                const scheduleCollectionRef = db.collection('schedules').doc(appId).collection('days');
-                const initialDates = [
-                    { id: '2025-08-02', date: 'August 2', day: 'Saturday' },
-                    { id: '2025-08-03', date: 'August 3', day: 'Sunday' },
-                    { id: '2025-08-04', date: 'August 4', day: 'Monday' },
-                    { id: '2025-08-05', date: 'August 5', day: 'Tuesday' },
-                    { id: '2025-08-06', date: 'August 6', day: 'Wednesday' },
-                    { id: '2025-08-07', date: 'August 7', day: 'Thursday' },
-                    { id: '2025-08-08', date: 'August 8', day: 'Friday' },
-                ];
+                if (!db) return;
+                const configRef = db.collection('config').doc('dates');
+                const unsubscribe = configRef.onSnapshot(doc => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        const generatedDates = generateDates(data.start, data.end);
+                        setDates({ ...data, generated: generatedDates });
+                    } else {
+                         // If no dates are set, stop loading and show a message
+                        setLoading(false);
+                    }
+                }, err => {
+                    setError("Could not load trip dates.");
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }, [db]);
+
+            useEffect(() => {
+                if (!db || !user || !dates) {
+                    if(user && !dates) setLoading(false); // Stop loading if user is ready but dates are not
+                    return;
+                };
+                const scheduleCollectionRef = db.collection('schedules').doc(dates.year.toString()).collection('days');
                 const unsubscribe = scheduleCollectionRef.onSnapshot((snapshot) => {
                     const signupData = {};
                     snapshot.forEach(doc => {
                         signupData[doc.id] = doc.data();
                     });
-                    const updatedSchedule = initialDates.map(day => ({ ...day, ...signupData[day.id] }));
+                    const updatedSchedule = dates.generated.map(day => ({ ...day, ...signupData[day.id] }));
                     setSchedule(updatedSchedule);
                     setLoading(false);
                 }, (err) => {
-                    console.error("Firestore Error:", err);
-                    setError("Failed to load schedule. Check your Firestore security rules.");
+                    setError("Failed to load schedule.");
                     setLoading(false);
                 });
                 return () => unsubscribe();
-            }, [db, userId]);
+            }, [db, user, dates]);
+
+            const handleAdminLogin = () => {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                auth.signInWithPopup(provider).catch(err => setError("Failed to sign in with Google."));
+            };
+
+            const handleSignOut = () => {
+                auth.signOut();
+                setView('main');
+            };
 
             const handleSignup = async (dayId, name, entree, sides) => {
                 if (!name.trim() || !entree.trim() || !db) return;
                 try {
-                    const dayRef = db.collection('schedules').doc(appId).collection('days').doc(dayId);
+                    const dayRef = db.collection('schedules').doc(dates.year.toString()).collection('days').doc(dayId);
                     await dayRef.set({
                         personName: name,
                         entree: entree,
                         sides: sides,
                         isTaken: true,
-                        signupUserId: userId // Keep track of original user if needed, or update to new user
                     });
                 } catch (err) {
                     setError("Could not save signup.");
                 }
             };
+            
+            const generateDates = (startDateStr, endDateStr) => {
+                const dates = [];
+                let currentDate = new Date(`${startDateStr}T00:00:00`);
+                const endDate = new Date(`${endDateStr}T00:00:00`);
+
+                while (currentDate <= endDate) {
+                    const dateString = currentDate.toISOString().split('T')[0];
+                    dates.push({
+                        id: dateString,
+                        date: currentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+                        day: currentDate.toLocaleDateString('en-US', { weekday: 'long' }),
+                    });
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                return dates;
+            };
 
             if (error) {
                 return <div className="h-screen flex items-center justify-center bg-red-50 p-4"><GlobalStyles /><div className="text-center bg-white p-8 rounded-lg shadow-lg"><h2 className="text-2xl font-bold text-red-700">An Error Occurred</h2><p className="text-red-600 mt-2">{error}</p></div></div>;
             }
+
             if (loading) {
                 return (
                     <div className="flex justify-center items-center h-screen bg-amber-100">
@@ -187,22 +233,93 @@
                     <GlobalStyles />
                     <div className="max-w-4xl mx-auto">
                         <header className="text-center mb-10">
-                            <div className="inline-block bg-white/60 p-2 rounded-full shadow-lg transform hover:scale-110 transition-transform duration-300">
+                            <div className="absolute top-4 right-4 flex items-center gap-4">
+                               {user && user.isAnonymous && <button onClick={handleAdminLogin} className="bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Admin Login</button>}
+                               {isAdmin && <button onClick={() => setView(view === 'admin' ? 'main' : 'admin')} className="bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg">{view === 'admin' ? 'View Schedule' : 'Admin'}</button>}
+                               {isAdmin && <button onClick={handleSignOut} className="bg-gray-200 p-2 rounded-full hover:bg-gray-300"><LogoutIcon /></button>}
+                            </div>
+                            <div className="inline-block bg-white/60 p-2 rounded-full shadow-lg transform hover:scale-110 transition-transform duration-300 mt-4">
                                 <div className="bg-orange-400 p-4 rounded-full">
                                    <Sun className="h-12 w-12 text-white"/>
                                 </div>
                             </div>
-                            <h1 className="text-5xl sm:text-6xl font-bold text-cyan-900 mt-4">2025 Family Beach Trip!</h1>
-                            <p className="text-lg text-cyan-800 mt-2">Dinner Schedule: Aug 2nd - 8th, 2025</p>
-                            <p className="text-xl text-orange-600 font-semibold mt-4">Pick a night to be the chef!</p>
+                            <h1 className="text-5xl sm:text-6xl font-bold text-cyan-900 mt-4">{dates ? `${dates.year} Family Beach Trip!` : 'Family Beach Trip!'}</h1>
+                            {view === 'main' && dates && <p className="text-lg text-cyan-800 mt-2">Dinner Schedule: {dates.generated[0].date} - {dates.generated[dates.generated.length - 1].date}</p>}
+                            {view === 'main' && <p className="text-xl text-orange-600 font-semibold mt-4">Pick a night to be the chef!</p>}
                         </header>
-                        <div className="space-y-5">
-                            {schedule.map(day => <DayCard key={day.id} day={day} onSignup={handleSignup} />)}
-                        </div>
+
+                        {view === 'admin' ? (
+                            <AdminView db={db} currentDates={dates} />
+                        ) : !dates ? (
+                            <div className="text-center text-xl text-gray-600">The trip dates have not been set yet. The admin needs to set them.</div>
+                        ) : (
+                            <div className="space-y-5">
+                                {schedule.map(day => <DayCard key={day.id} day={day} onSignup={handleSignup} />)}
+                            </div>
+                        )}
+                        
                         <footer className="text-center mt-10 text-cyan-800/70 text-sm">
                             <p>Have fun in the sun! ☀️🦀🌊</p>
                         </footer>
                     </div>
+                </div>
+            );
+        };
+        
+        const AdminView = ({ db, currentDates }) => {
+            const { useState, useEffect } = React;
+            const [year, setYear] = useState('');
+            const [startDate, setStartDate] = useState('');
+            const [endDate, setEndDate] = useState('');
+            const [message, setMessage] = useState('');
+
+            useEffect(() => {
+                if (currentDates) {
+                    setYear(currentDates.year);
+                    setStartDate(currentDates.start);
+                    setEndDate(currentDates.end);
+                }
+            }, [currentDates]);
+
+            const handleSaveDates = async (e) => {
+                e.preventDefault();
+                if (!year || !startDate || !endDate) {
+                    setMessage('Please fill out all fields.');
+                    return;
+                }
+                try {
+                    const configRef = db.collection('config').doc('dates');
+                    await configRef.set({
+                        year: parseInt(year),
+                        start: startDate,
+                        end: endDate,
+                    });
+                    setMessage('Dates saved successfully!');
+                    setTimeout(() => setMessage(''), 3000);
+                } catch (err) {
+                    setMessage('Failed to save dates.');
+                }
+            };
+            
+            return (
+                <div className="bg-white/80 p-6 rounded-xl shadow-lg">
+                    <h2 className="text-3xl font-bold text-cyan-900 mb-4">Admin Panel - Set Vacation Dates</h2>
+                    <form onSubmit={handleSaveDates} className="space-y-4">
+                        <div>
+                            <label htmlFor="year" className="block text-sm font-semibold text-cyan-800 mb-1">Trip Year</label>
+                            <input type="number" id="year" value={year} onChange={e => setYear(e.target.value)} className="w-full p-2 border rounded-lg" placeholder="e.g., 2025" />
+                        </div>
+                        <div>
+                            <label htmlFor="start-date" className="block text-sm font-semibold text-cyan-800 mb-1">Start Date</label>
+                            <input type="date" id="start-date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded-lg" />
+                        </div>
+                        <div>
+                            <label htmlFor="end-date" className="block text-sm font-semibold text-cyan-800 mb-1">End Date</label>
+                            <input type="date" id="end-date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded-lg" />
+                        </div>
+                        <button type="submit" className="bg-sky-500 text-white font-bold py-2 px-4 rounded-lg">Save Dates</button>
+                        {message && <p className="mt-4 text-green-600">{message}</p>}
+                    </form>
                 </div>
             );
         };
@@ -218,7 +335,6 @@
             const isTaken = day.isTaken;
 
             const handleEditClick = () => {
-                // Pre-fill the form with existing data when editing
                 setName(day.personName || '');
                 setEntree(day.entree || '');
                 setSides(day.sides || '');
@@ -227,7 +343,6 @@
             
             const handleCancel = () => {
                 setIsEditing(false);
-                // Clear form fields on cancel
                 setName('');
                 setEntree('');
                 setSides('');
