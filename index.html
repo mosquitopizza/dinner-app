@@ -307,7 +307,8 @@
                             <div className="border-t border-amber-200 pt-4">
                                 <div className="flex items-center gap-3">
                                     <Sun className="h-6 w-6 text-orange-500"/>
-                                    <p className="text-lg font-bold text-cyan-900">{day.personName} is cooking:</p>
+                                    {/* --- THIS IS THE MODIFIED LINE --- */}
+                                    <p className="text-lg font-bold text-cyan-900">{day.personName} {day.personName === 'All of us' ? 'are cooking:' : 'is cooking:'}</p>
                                 </div>
                                 <div className="mt-3 pl-9 text-cyan-800">
                                    <p><span className="font-semibold">Main:</span> {day.entree}</p>
