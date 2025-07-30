@@ -8,27 +8,26 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Firebase SDKs (Compat version for easier use in single file) -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- IMPORTANT: PASTE YOUR FIREBASE CONFIG HERE ---
-        // Replace the placeholder values below with your actual Firebase keys.
+        // --- CORRECTED FIREBASE CONFIG ---
         const firebaseConfig = {
-  apiKey: "AIzaSyC4ivOi7TL5F3Tp23y1XmmZJuRVcMdosw0",
-  authDomain: "beach-dinner-signup.firebaseapp.com",
-  projectId: "beach-dinner-signup",
-  storageBucket: "beach-dinner-signup.firebasestorage.app",
-  messagingSenderId: "47314255862",
-  appId: "1:47314255862:web:1954797f2680e77fcd91d7"
-};
-                
-        // --- Imports from Firebase SDK ---
-        const { initializeApp } = "https://www.gstatic.com/firebasejs/9.17.2/firebase-app.js";
-        const { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc } = "https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore.js";
-        const { getAuth, signInAnonymously, onAuthStateChanged } = "https://www.gstatic.com/firebasejs/9.17.2/firebase-auth.js";
-
+            apiKey: "AIzaSyC4ivOi7TL5F3Tp23y1XmmZJuRVcMdosw0",
+            authDomain: "beach-dinner-signup.firebaseapp.com",
+            projectId: "beach-dinner-signup",
+            storageBucket: "beach-dinner-signup.appspot.com",
+            messagingSenderId: "47314255862",
+            appId: "1:47314255862:web:1954797f2680e77fcd91d7"
+        };
+        
         // --- Icon Components ---
         const Sun = (props) => (
             <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -60,29 +59,34 @@
 
             useEffect(() => {
                 try {
+                    if (typeof firebase === 'undefined') {
+                        setError("Firebase SDKs failed to load. Please check your internet connection and refresh.");
+                        setLoading(false);
+                        return;
+                    }
                     if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
                         setError("Firebase is not configured. Please add your API keys.");
                         setLoading(false);
                         return;
                     }
-                    const app = initializeApp(firebaseConfig);
-                    setDb(getFirestore(app));
-                    setAuth(getAuth(app));
+                    const app = firebase.initializeApp(firebaseConfig);
+                    setDb(app.firestore());
+                    setAuth(app.auth());
                 } catch (err) {
                     console.error("Firebase Init Error:", err);
-                    setError("Failed to initialize Firebase.");
+                    setError("Failed to initialize Firebase. Check that your API keys are correct.");
                     setLoading(false);
                 }
             }, []);
 
             useEffect(() => {
                 if (!auth) return;
-                const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                const unsubscribe = auth.onAuthStateChanged(async (user) => {
                     if (user) {
                         setUserId(user.uid);
                     } else {
                         try {
-                            await signInAnonymously(auth);
+                            await auth.signInAnonymously();
                         } catch (err) {
                             setError("Could not connect to the authentication service.");
                             setLoading(false);
@@ -94,7 +98,7 @@
 
             useEffect(() => {
                 if (!db || !userId) return;
-                const scheduleCollectionRef = collection(db, 'schedules', appId, 'days');
+                const scheduleCollectionRef = db.collection('schedules').doc(appId).collection('days');
                 const initialDates = [
                     { id: '2025-08-02', date: 'August 2', day: 'Saturday' },
                     { id: '2025-08-03', date: 'August 3', day: 'Sunday' },
@@ -105,7 +109,7 @@
                     { id: '2025-08-08', date: 'August 8', day: 'Friday' },
                     { id: '2025-08-09', date: 'August 9', day: 'Saturday' },
                 ];
-                const unsubscribe = onSnapshot(scheduleCollectionRef, (snapshot) => {
+                const unsubscribe = scheduleCollectionRef.onSnapshot((snapshot) => {
                     const signupData = {};
                     snapshot.forEach(doc => {
                         signupData[doc.id] = doc.data();
@@ -114,7 +118,8 @@
                     setSchedule(updatedSchedule);
                     setLoading(false);
                 }, (err) => {
-                    setError("Failed to load schedule. Check Firestore rules.");
+                    console.error("Firestore Error:", err);
+                    setError("Failed to load schedule. Check your Firestore security rules.");
                     setLoading(false);
                 });
                 return () => unsubscribe();
@@ -123,8 +128,8 @@
             const handleSignup = async (dayId, name, entree, sides) => {
                 if (!name.trim() || !entree.trim() || !db) return;
                 try {
-                    const dayRef = doc(db, 'schedules', appId, 'days', dayId);
-                    await setDoc(dayRef, {
+                    const dayRef = db.collection('schedules').doc(appId).collection('days').doc(dayId);
+                    await dayRef.set({
                         personName: name,
                         entree: entree,
                         sides: sides,
@@ -139,8 +144,8 @@
             const handleRemove = async (dayId) => {
                 if (!db) return;
                 try {
-                    const dayRef = doc(db, 'schedules', appId, 'days', dayId);
-                    await deleteDoc(dayRef);
+                    const dayRef = db.collection('schedules').doc(appId).collection('days').doc(dayId);
+                    await dayRef.delete();
                 } catch (err) {
                     setError("Could not remove signup.");
                 }
