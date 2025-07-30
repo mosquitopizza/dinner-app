@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2025 Family Beach Trip</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- CORRECTED FIREBASE CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyC4ivOi7TL5F3Tp23y1XmmZJuRVcMdosw0",
+            authDomain: "beach-dinner-signup.firebaseapp.com",
+            projectId: "beach-dinner-signup",
+            storageBucket: "beach-dinner-signup.appspot.com",
+            messagingSenderId: "47314255862",
+            appId: "1:47314255862:web:1954797f2680e77fcd91d7"
+        };
+
+        // --- Google Font & CSS with Gradient Background ---
+        const GlobalStyles = () => (
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+                body {
+                    font-family: 'Poppins', sans-serif;
+                    background-color: #fef3c7;
+                    background-image: linear-gradient(170deg, #fef3c7 0%, #e0f2fe 100%);
+                }
+                .font-poppins {
+                    font-family: 'Poppins', sans-serif;
+                }
+                .animate-fade-in {
+                    animation: fadeIn 0.5s ease-in-out both; /* Use 'both' to keep final state */
+                }
+                @keyframes fadeIn {
+                    from { 
+                        opacity: 0; 
+                        transform: translateY(-10px); 
+                    }
+                    to { 
+                        opacity: 1; 
+                        transform: translateY(0); 
+                    }
+                }
+            `}</style>
+        );
+        
+        // --- Icon Components ---
+        const Sun = (props) => (
+            <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12"x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+        );
+        const PlusCircle = (props) => (
+            <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="16" /><line x1="8" x2="16" y1="12" y2="12" />
+            </svg>
+        );
+        const Pencil = (props) => (
+            <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+            </svg>
+        );
+        const CalendarDays = (props) => (
+            <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" />
+            </svg>
+        );
+
+        // --- CONSTANTS ---
+        const INITIAL_DATES = [
+            { id: '2025-08-02', date: 'August 2', day: 'Saturday' },
+            { id: '2025-08-03', date: 'August 3', day: 'Sunday' },
+            { id: '2025-08-04', date: 'August 4', day: 'Monday' },
+            { id: '2025-08-05', date: 'August 5', day: 'Tuesday' },
+            { id: '2025-08-06', date: 'August 6', day: 'Wednesday' },
+            { id: '2025-08-07', date: 'August 7', day: 'Thursday' },
+            { id: '2025-08-08', date: 'August 8', day: 'Friday' },
+        ];
+
+        // --- Main App Component ---
+        const App = () => {
+            const { useState, useEffect } = React;
+
+            const [schedule, setSchedule] = useState([]);
+            const [userId, setUserId] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [db, setDb] = useState(null);
+            const [auth, setAuth] = useState(null);
+            const appId = 'family-beach-trip-2025';
+
+            useEffect(() => {
+                try {
+                    if (typeof firebase === 'undefined') {
+                        setError("Firebase SDKs failed to load. Please check your internet connection and refresh.");
+                        setLoading(false); return;
+                    }
+                    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+                        setError("Firebase is not configured. Please add your API keys.");
+                        setLoading(false); return;
+                    }
+                    const app = firebase.initializeApp(firebaseConfig);
+                    setDb(app.firestore());
+                    setAuth(app.auth());
+                } catch (err) {
+                    console.error("Firebase Init Error:", err);
+                    setError("Failed to initialize Firebase. Check that your API keys are correct.");
+                    setLoading(false);
+                }
+            }, []);
+
+            useEffect(() => {
+                if (!auth) return;
+                const unsubscribe = auth.onAuthStateChanged(async (user) => {
+                    if (user) {
+                        setUserId(user.uid);
+                    } else {
+                        try {
+                            await auth.signInAnonymously();
+                        } catch (err) {
+                            setError("Could not connect to the authentication service.");
+                            setLoading(false);
+                        }
+                    }
+                });
+                return () => unsubscribe();
+            }, [auth]);
+
+            useEffect(() => {
+                if (!db || !userId) return;
+                const scheduleCollectionRef = db.collection('schedules').doc(appId).collection('days');
+                
+                const unsubscribe = scheduleCollectionRef.onSnapshot((snapshot) => {
+                    const signupData = {};
+                    snapshot.forEach(doc => {
+                        signupData[doc.id] = doc.data();
+                    });
+                    const updatedSchedule = INITIAL_DATES.map(day => ({ ...day, ...signupData[day.id] }));
+                    setSchedule(updatedSchedule);
+                    setLoading(false);
+                }, (err) => {
+                    console.error("Firestore Error:", err);
+                    setError("Failed to load schedule. Check your Firestore security rules.");
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }, [db, userId]);
+
+            const handleSignup = async (dayId, name, entree, sides) => {
+                if (!name.trim() || !entree.trim() || !db) return;
+                try {
+                    const dayRef = db.collection('schedules').doc(appId).collection('days').doc(dayId);
+                    await dayRef.set({
+                        personName: name,
+                        entree: entree,
+                        sides: sides,
+                        isTaken: true,
+                        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (err) {
+                    setError("Could not save signup.");
+                }
+            };
+
+            const handleClear = async (dayId) => {
+                if (!db) return;
+                try {
+                    const dayRef = db.collection('schedules').doc(appId).collection('days').doc(dayId);
+                    await dayRef.set({ isTaken: false }, { merge: true });
+                    await dayRef.update({
+                        personName: firebase.firestore.FieldValue.delete(),
+                        entree: firebase.firestore.FieldValue.delete(),
+                        sides: firebase.firestore.FieldValue.delete(),
+                        lastUpdated: firebase.firestore.FieldValue.delete()
+                    });
+                } catch (err) {
+                    setError("Could not clear the signup.");
+                }
+            };
+
+            if (error) {
+                return <div className="h-screen flex items-center justify-center bg-red-50 p-4"><GlobalStyles /><div className="text-center bg-white p-8 rounded-lg shadow-lg"><h2 className="text-2xl font-bold text-red-700">An Error Occurred</h2><p className="text-red-600 mt-2">{error}</p></div></div>;
+            }
+            if (loading) {
+                return (
+                    <div className="flex justify-center items-center h-screen">
+                        <GlobalStyles />
+                        <div className="text-center">
+                            <CalendarDays className="h-12 w-12 text-sky-500 mx-auto animate-spin" />
+                            <p className="text-xl text-stone-600 mt-4 font-poppins">Loading Dinner Schedule...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen font-poppins p-4 sm:p-6 lg:p-8">
+                    <GlobalStyles />
+                    <div className="max-w-7xl mx-auto">
+                        <header className="text-center mb-10">
+                            <div className="inline-block bg-white/60 p-2 rounded-full shadow-lg transform hover:scale-110 transition-transform duration-300">
+                                <div className="bg-orange-400 p-4 rounded-full">
+                                   <Sun className="h-12 w-12 text-white"/>
+                                </div>
+                            </div>
+                            <h1 className="text-5xl sm:text-6xl font-bold text-cyan-900 mt-4">2025 Family Beach Trip!</h1>
+                            <p className="text-lg text-cyan-800 mt-2">Dinner Schedule: Aug 2nd - 8th, 2025</p>
+                            <p className="text-xl text-orange-600 font-semibold mt-4">Pick a night to be the chef!</p>
+                        </header>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {schedule.map((day, index) => (
+                                <DayCard 
+                                    key={day.id} 
+                                    day={day} 
+                                    onSignup={handleSignup} 
+                                    onClear={handleClear} 
+                                    style={{ animationDelay: `${index * 100}ms` }}
+                                />
+                            ))}
+                        </div>
+                        <footer className="text-center mt-10 text-cyan-800/70 text-sm">
+                            <p>Have fun in the sun! ☀️🦀🌊</p>
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Day Card Component ---
+        const DayCard = ({ day, onSignup, onClear, ...props }) => {
+            const { useState } = React;
+            const [isEditing, setIsEditing] = useState(false);
+            const [name, setName] = useState('');
+            const [entree, setEntree] = useState('');
+            const [sides, setSides] = useState('');
+
+            const isTaken = day.isTaken;
+
+            const formatDate = (timestamp) => {
+                if (!timestamp) return '';
+                return timestamp.toDate().toLocaleDateString("en-US", { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            };
+
+            const handleEditClick = () => {
+                setName(day.personName || '');
+                setEntree(day.entree || '');
+                setSides(day.sides || '');
+                setIsEditing(true);
+            };
+            
+            const handleCancel = () => {
+                setIsEditing(false);
+                setName('');
+                setEntree('');
+                setSides('');
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSignup(day.id, name, entree, sides);
+                setIsEditing(false);
+            };
+
+            const handleClearClick = () => {
+                if (window.confirm("Are you sure you want to clear this dinner spot? This cannot be undone.")) {
+                    onClear(day.id);
+                    setIsEditing(false);
+                }
+            };
+
+            return (
+                <div 
+                    className={`
+                        bg-white/60 backdrop-blur-md border border-white/20 
+                        rounded-xl shadow-lg overflow-hidden transition-all duration-500 
+                        hover:shadow-2xl hover:-translate-y-1 animate-fade-in
+                        ${isTaken ? 'border-l-8 border-sky-400' : 'border-l-8 border-orange-400'}
+                    `}
+                    style={props.style}
+                >
+                    <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <p className="text-sm font-semibold text-sky-600 uppercase tracking-wider">{day.day}</p>
+                                <h2 className="text-3xl font-bold text-cyan-900">{day.date}</h2>
+                            </div>
+                            {!isTaken && !isEditing && <button onClick={handleEditClick} className="flex items-center gap-2 bg-orange-400 text-white font-bold py-2 px-5 rounded-full hover:bg-orange-500 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"><PlusCircle className="h-5 w-5"/>I'll Cook!</button>}
+                            {isTaken && !isEditing && <button onClick={handleEditClick} className="flex items-center gap-2 bg-rose-400 text-white font-bold py-2 px-5 rounded-full hover:bg-rose-500 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"><Pencil className="h-5 w-5"/>Edit</button>}
+                        </div>
+                        {isEditing ? (
+                            <div className="border-t border-amber-200 pt-4">
+                                <form onSubmit={handleSubmit}>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label htmlFor={`name-${day.id}`} className="block text-sm font-semibold text-cyan-800 mb-1">Chef's Name</label>
+                                            <select id={`name-${day.id}`} value={name} onChange={e => setName(e.target.value)} className="mt-1 block w-full px-4 py-2 bg-white/70 border border-amber-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" required>
+                                                <option value="" disabled>-- Select a Chef --</option>
+                                                <option value="Randal & Michelle">Randal & Michelle</option>
+                                                <option value="Amy & Steve">Amy & Steve</option>
+                                                <option value="Ally & Terry">Ally & Terry</option>
+                                                <option value="Abby & Gabby">Abby & Gabby</option>
+                                                <option value="Kelly">Kelly</option>
+                                                <option value="All of us">All of us</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label htmlFor={`entree-${day.id}`} className="block text-sm font-semibold text-cyan-800 mb-1">Main Dish</label>
+                                            <input type="text" id={`entree-${day.id}`} value={entree} onChange={e => setEntree(e.target.value)} className="mt-1 block w-full px-4 py-2 bg-white/70 border border-amber-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" placeholder="e.g., Freshly Grilled Fish" required />
+                                        </div>
+                                        <div>
+                                            <label htmlFor={`sides-${day.id}`} className="block text-sm font-semibold text-cyan-800 mb-1">Sides (optional)</label>
+                                            <input type="text" id={`sides-${day.id}`} value={sides} onChange={e => setSides(e.target.value)} className="mt-1 block w-full px-4 py-2 bg-white/70 border border-amber-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" placeholder="e.g., Pineapple Salad" />
+                                        </div>
+                                    </div>
+                                    <div className="mt-6 flex justify-between items-center">
+                                        { isTaken && <button type="button" onClick={handleClearClick} className="font-semibold text-red-600 py-2 px-4 rounded-lg hover:bg-red-100/70 transition-colors">Clear My Spot</button> }
+                                        <div className="flex-grow flex justify-end space-x-3">
+                                            <button type="button" onClick={handleCancel} className="font-semibold text-stone-600 py-2 px-4 rounded-lg hover:bg-amber-100/70 transition-colors">Cancel</button>
+                                            <button type="submit" className="bg-sky-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-sky-600 transition-colors shadow-sm transform active:scale-95">Save Changes</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        ) : isTaken ? (
+                            <div className="border-t border-amber-200 pt-4">
+                                <div className="flex items-center gap-3">
+                                    <Sun className="h-6 w-6 text-orange-500"/>
+                                    <p className="text-lg font-bold text-cyan-900">{day.personName} {day.personName === 'All of us' ? 'are cooking:' : 'is cooking:'}</p>
+                                </div>
+                                <div className="mt-3 pl-9 text-cyan-800 space-y-1">
+                                   <p><span className="font-semibold">Main:</span> {day.entree}</p>
+                                   {day.sides && <p><span className="font-semibold">Sides:</span> {day.sides}</p>}
+                                   {day.lastUpdated && <p className="mt-2 text-xs text-stone-500/80">Last updated: {formatDate(day.lastUpdated)}</p>}
+                                </div>
+                            </div>
+                        ) : <div className="text-center text-orange-500/80 pt-4 border-t border-dashed border-amber-300">This night is up for grabs!</div>}
+                    </div>
+                </div>
+            );
+        };
+        
+        // --- Mount the React App ---
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
