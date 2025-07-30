@@ -61,9 +61,9 @@
                 <circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="16" /><line x1="8" x2="16" y1="12" y2="12" />
             </svg>
         );
-        const Trash2 = (props) => (
+        const Pencil = (props) => (
             <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" />
+                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
             </svg>
         );
         const CalendarDays = (props) => (
@@ -160,20 +160,10 @@
                         entree: entree,
                         sides: sides,
                         isTaken: true,
-                        signupUserId: userId
+                        signupUserId: userId // Keep track of original user if needed, or update to new user
                     });
                 } catch (err) {
                     setError("Could not save signup.");
-                }
-            };
-
-            const handleRemove = async (dayId) => {
-                if (!db) return;
-                try {
-                    const dayRef = db.collection('schedules').doc(appId).collection('days').doc(dayId);
-                    await dayRef.delete();
-                } catch (err) {
-                    setError("Could not remove signup.");
                 }
             };
 
@@ -207,7 +197,7 @@
                             <p className="text-xl text-orange-600 font-semibold mt-4">Pick a night to be the chef!</p>
                         </header>
                         <div className="space-y-5">
-                            {schedule.map(day => <DayCard key={day.id} day={day} currentUserId={userId} onSignup={handleSignup} onRemove={handleRemove} />)}
+                            {schedule.map(day => <DayCard key={day.id} day={day} onSignup={handleSignup} />)}
                         </div>
                         <footer className="text-center mt-10 text-cyan-800/70 text-sm">
                             <p>Have fun in the sun! ☀️🦀🌊</p>
@@ -218,20 +208,35 @@
         };
 
         // --- Day Card Component ---
-        const DayCard = ({ day, currentUserId, onSignup, onRemove }) => {
+        const DayCard = ({ day, onSignup }) => {
             const { useState } = React;
-            const [isSigningUp, setIsSigningUp] = useState(false);
+            const [isEditing, setIsEditing] = useState(false);
             const [name, setName] = useState('');
             const [entree, setEntree] = useState('');
             const [sides, setSides] = useState('');
 
             const isTaken = day.isTaken;
-            const isOwner = isTaken && day.signupUserId === currentUserId;
+
+            const handleEditClick = () => {
+                // Pre-fill the form with existing data when editing
+                setName(day.personName || '');
+                setEntree(day.entree || '');
+                setSides(day.sides || '');
+                setIsEditing(true);
+            };
+            
+            const handleCancel = () => {
+                setIsEditing(false);
+                // Clear form fields on cancel
+                setName('');
+                setEntree('');
+                setSides('');
+            };
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 onSignup(day.id, name, entree, sides);
-                setIsSigningUp(false);
+                setIsEditing(false);
             };
 
             return (
@@ -242,10 +247,10 @@
                                 <p className="text-sm font-semibold text-sky-600 uppercase tracking-wider">{day.day}</p>
                                 <h2 className="text-3xl font-bold text-cyan-900">{day.date}</h2>
                             </div>
-                            {!isTaken && !isSigningUp && <button onClick={() => setIsSigningUp(true)} className="flex items-center gap-2 bg-orange-400 text-white font-bold py-2 px-5 rounded-full hover:bg-orange-500 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"><PlusCircle className="h-5 w-5"/>I'll Cook!</button>}
-                            {isOwner && <button onClick={() => onRemove(day.id)} className="flex items-center gap-2 bg-rose-400 text-white font-bold py-2 px-5 rounded-full hover:bg-rose-500 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"><Trash2 className="h-5 w-5"/>Cancel</button>}
+                            {!isTaken && !isEditing && <button onClick={handleEditClick} className="flex items-center gap-2 bg-orange-400 text-white font-bold py-2 px-5 rounded-full hover:bg-orange-500 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"><PlusCircle className="h-5 w-5"/>I'll Cook!</button>}
+                            {isTaken && !isEditing && <button onClick={handleEditClick} className="flex items-center gap-2 bg-rose-400 text-white font-bold py-2 px-5 rounded-full hover:bg-rose-500 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"><Pencil className="h-5 w-5"/>Edit</button>}
                         </div>
-                        {isSigningUp ? (
+                        {isEditing ? (
                             <form onSubmit={handleSubmit} className="border-t border-amber-200 pt-4 animate-fade-in">
                                 <div className="space-y-4">
                                     <div>
@@ -262,8 +267,8 @@
                                     </div>
                                 </div>
                                 <div className="mt-6 flex justify-end space-x-3">
-                                    <button type="button" onClick={() => setIsSigningUp(false)} className="font-semibold text-stone-600 py-2 px-4 rounded-lg hover:bg-amber-100/70 transition-colors">Nevermind</button>
-                                    <button type="submit" className="bg-sky-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-sky-600 transition-colors shadow-sm">Save My Spot</button>
+                                    <button type="button" onClick={handleCancel} className="font-semibold text-stone-600 py-2 px-4 rounded-lg hover:bg-amber-100/70 transition-colors">Cancel</button>
+                                    <button type="submit" className="bg-sky-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-sky-600 transition-colors shadow-sm">Save Changes</button>
                                 </div>
                             </form>
                         ) : isTaken ? (
